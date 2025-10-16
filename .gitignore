@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.pdb
 *.egg-info/
 *.egg
 
@@ -14,7 +13,7 @@ env/
 # ---- Environment Variables ----
 .env
 
-
+# ---- IDE and Editor Files ----
 .vscode/
 .idea/
 *.swp
@@ -26,4 +25,3 @@ Thumbs.db
 
 # ---- Logs ----
 *.log
-
