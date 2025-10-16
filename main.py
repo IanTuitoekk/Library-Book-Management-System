@@ -1,200 +1,178 @@
 import click
-from datetime import datetime
-from database import SessionLocal
+from database import get_session, init_db
 from models import Book, Member, BorrowRecord
+from datetime import date
 
-# Create a DB session
-session = SessionLocal()
-
+# ========== MAIN CLI ==========
 @click.group()
 def cli():
-    """Library Management System CLI"""
+    """📚 Library Management System CLI"""
     pass
 
-# =======================
-#       BOOK COMMANDS
-# =======================
+
+# ========== DATABASE ==========
+@cli.command("init-db")
+def initialize_database():
+    """Initialize the database (create all tables)."""
+    init_db()
+    click.echo("✅ Database initialized successfully!")
+
+
+# ========== BOOKS ==========
 @cli.group()
-def book():
-    """Manage library books"""
+def books():
+    """Manage books"""
     pass
 
-@book.command("add")
-@click.option("--title", prompt="Book Title")
-@click.option("--author", prompt="Author")
-@click.option("--isbn", prompt="ISBN")
-def add_book(title, author, isbn):
-    """Add a new book"""
-    if session.query(Book).filter_by(isbn=isbn).first():
-        click.echo("Error: ISBN already exists!")
-        return
-    new_book = Book(title=title, author=author, isbn=isbn)
-    session.add(new_book)
-    session.commit()
-    click.echo(f"Book '{title}' by {author} added successfully.")
 
-@book.command("list")
+@books.command("list")
 def list_books():
     """List all books"""
-    books = session.query(Book).all()
-    if not books:
-        click.echo("No books found.")
+    session = get_session()
+    books_list = session.query(Book).all()
+    if not books_list:
+        click.echo("⚠️ No books found.")
         return
-    click.echo("ID | Title | Author | ISBN | Status")
-    click.echo("-" * 60)
-    for b in books:
-        status = "Available" if b.available else "Borrowed"
-        click.echo(f"{b.id} | {b.title} | {b.author} | {b.isbn} | {status}")
+    for book in books_list:
+        available_count = book.total_copies - session.query(BorrowRecord).filter(
+            BorrowRecord.book_id == book.id,
+            BorrowRecord.return_date.is_(None)
+        ).count()
+        status = f"✅ {available_count}/{book.total_copies} available" if available_count > 0 else "❌ All borrowed"
+        click.echo(f"{book.id}: {book.title} by {book.author} - {status}")
 
-@book.command("update")
-@click.option("--book_id", type=int, prompt="Book ID to update")
-@click.option("--title", prompt="New title", required=False)
-@click.option("--author", prompt="New author", required=False)
-@click.option("--isbn", prompt="New ISBN", required=False)
-def update_book(book_id, title, author, isbn):
-    """Update an existing book"""
-    book = session.query(Book).get(book_id)
-    if not book:
-        click.echo("Book not found!")
-        return
-    if title:
-        book.title = title
-    if author:
-        book.author = author
-    if isbn:
-        if session.query(Book).filter(Book.isbn==isbn, Book.id != book_id).first():
-            click.echo("Error: ISBN already exists!")
-            return
-        book.isbn = isbn
+
+@books.command("add")
+def add_book():
+    """Add a new book"""
+    title = click.prompt("Enter book title")
+    author = click.prompt("Enter author name")
+    total_copies = click.prompt("Enter total copies", type=int)
+
+    session = get_session()
+    book = Book(title=title, author=author, total_copies=total_copies)
+    session.add(book)
     session.commit()
-    click.echo(f"Book ID {book_id} updated successfully.")
+    click.echo("✅ Book added successfully!")
+    session.close()
 
-@book.command("delete")
-@click.option("--book_id", type=int, prompt="Book ID to delete")
-def delete_book(book_id):
-    """Delete a book"""
-    book = session.query(Book).get(book_id)
-    if not book:
-        click.echo("Book not found!")
-        return
-    session.delete(book)
-    session.commit()
-    click.echo(f"Book ID {book_id} deleted successfully.")
 
-# =======================
-#       MEMBER COMMANDS
-# =======================
+# ========== MEMBERS ==========
 @cli.group()
-def member():
-    """Manage library members"""
+def members():
+    """Manage members"""
     pass
 
-@member.command("add")
-@click.option("--name", prompt="Member Name")
-@click.option("--email", prompt="Member Email")
-def add_member(name, email):
-    if session.query(Member).filter_by(email=email).first():
-        click.echo("Error: Email already exists!")
-        return
-    new_member = Member(name=name, email=email)
-    session.add(new_member)
-    session.commit()
-    click.echo(f"Member '{name}' added successfully.")
 
-@member.command("list")
+@members.command("list")
 def list_members():
-    members = session.query(Member).all()
-    if not members:
-        click.echo("No members found.")
+    """List all members"""
+    session = get_session()
+    members_list = session.query(Member).all()
+    if not members_list:
+        click.echo("⚠️ No members found.")
         return
-    click.echo("ID | Name | Email | Join Date")
-    click.echo("-" * 40)
-    for m in members:
-        join_date = m.join_date.strftime("%Y-%m-%d")
-        click.echo(f"{m.id} | {m.name} | {m.email} | {join_date}")
+    for member in members_list:
+        click.echo(f"{member.id}: {member.name} ({member.email}) joined {member.join_date}")
+    session.close()
 
-@member.command("update")
-@click.option("--member_id", type=int, prompt="Member ID to update")
-@click.option("--name", prompt="New name", required=False)
-@click.option("--email", prompt="New email", required=False)
-def update_member(member_id, name, email):
-    member = session.query(Member).get(member_id)
-    if not member:
-        click.echo("Member not found!")
-        return
-    if name:
-        member.name = name
-    if email:
-        if session.query(Member).filter(Member.email==email, Member.id != member_id).first():
-            click.echo("Error: Email already exists!")
-            return
-        member.email = email
+
+@members.command("add")
+def add_member():
+    """Add a new member"""
+    name = click.prompt("Enter member name")
+    email = click.prompt("Enter email")
+
+    session = get_session()
+    member = Member(name=name, email=email)
+    session.add(member)
     session.commit()
-    click.echo(f"Member ID {member_id} updated successfully.")
+    click.echo("✅ Member added successfully!")
+    session.close()
 
-@member.command("delete")
-@click.option("--member_id", type=int, prompt="Member ID to delete")
-def delete_member(member_id):
-    member = session.query(Member).get(member_id)
-    if not member:
-        click.echo("Member not found!")
+
+# ========== BORROW RECORDS ==========
+@cli.group()
+def records():
+    """Manage borrow records"""
+    pass
+
+
+@records.command("list")
+def list_records():
+    """List all borrow records"""
+    session = get_session()
+    records_list = session.query(BorrowRecord).all()
+    if not records_list:
+        click.echo("⚠️ No borrow records found.")
         return
-    session.delete(member)
-    session.commit()
-    click.echo(f"Member ID {member_id} deleted successfully.")
+    for record in records_list:
+        status = f"Returned {record.return_date}" if record.return_date else "Not returned yet"
+        click.echo(
+            f"Record #{record.id}: Book {record.book.title} by {record.book.author} | "
+            f"Member: {record.member.name} | Borrowed: {record.borrow_date} | {status}"
+        )
+    session.close()
 
-# =======================
-#       BORROW & RETURN
-# =======================
-@cli.command("borrow")
-@click.option("--book_id", type=int, prompt="Book ID to borrow")
-@click.option("--member_id", type=int, prompt="Member ID borrowing the book")
-def borrow_book(book_id, member_id):
+
+@records.command("borrow")
+def borrow_book():
+    """Borrow a book"""
+    session = get_session()
+    book_id = click.prompt("Enter Book ID", type=int)
+    member_id = click.prompt("Enter Member ID", type=int)
+
     book = session.query(Book).get(book_id)
     member = session.query(Member).get(member_id)
+
     if not book:
-        click.echo("Error: Book not found!")
+        click.echo("❌ Book not found.")
+        session.close()
         return
     if not member:
-        click.echo("Error: Member not found!")
+        click.echo("❌ Member not found.")
+        session.close()
         return
-    if not book.available:
-        click.echo(f"Error: Book '{book.title}' is already borrowed.")
+
+    # Check if copies are available
+    borrowed_count = session.query(BorrowRecord).filter(
+        BorrowRecord.book_id == book.id,
+        BorrowRecord.return_date.is_(None)
+    ).count()
+    
+    if borrowed_count >= book.total_copies:
+        click.echo(f"⚠️ All {book.total_copies} copies of this book are currently borrowed.")
+        session.close()
         return
-    record = BorrowRecord(book_id=book_id, member_id=member_id)
-    book.available = False
+
+    record = BorrowRecord(book_id=book.id, member_id=member.id)
     session.add(record)
     session.commit()
-    click.echo(f"Book '{book.title}' borrowed by '{member.name}'.")
+    click.echo(f"✅ {member.name} successfully borrowed '{book.title}'.")
+    session.close()
 
-@cli.command("return")
-@click.option("--book_id", type=int, prompt="Book ID to return")
-def return_book(book_id):
-    record = session.query(BorrowRecord).filter_by(book_id=book_id, return_date=None).first()
+
+@records.command("return")
+def return_book():
+    """Return a borrowed book"""
+    session = get_session()
+    record_id = click.prompt("Enter Borrow Record ID", type=int)
+
+    record = session.query(BorrowRecord).get(record_id)
     if not record:
-        click.echo("No active borrow record found for this book.")
+        click.echo("❌ Borrow record not found.")
+        session.close()
         return
-    record.return_date = datetime.utcnow()
-    record.book.available = True
+    if record.return_date:
+        click.echo("⚠️ This book has already been returned.")
+        session.close()
+        return
+
+    record.return_date = date.today()
     session.commit()
-    click.echo(f"Book '{record.book.title}' returned successfully.")
+    click.echo(f"✅ '{record.book.title}' returned successfully by {record.member.name}.")
+    session.close()
 
-# =======================
-#       HISTORY VIEW
-# =======================
-@cli.command("history")
-def view_history():
-    records = session.query(BorrowRecord).all()
-    if not records:
-        click.echo("No borrowing history found.")
-        return
-    click.echo("Book | Member | Borrowed At | Returned At")
-    click.echo("-" * 60)
-    for r in records:
-        borrowed = r.borrow_date.strftime("%Y-%m-%d %H:%M")
-        returned = r.return_date.strftime("%Y-%m-%d %H:%M") if r.return_date else "Not returned"
-        click.echo(f"{r.book.title} | {r.member.name} | {borrowed} | {returned}")
 
-# Entry point
 if __name__ == "__main__":
     cli()
