@@ -1,27 +1,21 @@
-# ---- Python ----
+# Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
-*.pyd
 *.egg-info/
 *.egg
 
-# ---- Virtual Environment ----
+# Virtual Environment
 venv/
 env/
 
-# ---- Environment Variables ----
+# Environment Variables
 .env
 
-# ---- IDE and Editor Files ----
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# ---- OS Files ----
+# OS
 .DS_Store
 Thumbs.db
-
-# ---- Logs ----
-*.log
