@@ -1,8 +1,9 @@
 # models.py
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-from datetime import datetime
-from database import Base
+from sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship
+from datetime import date
+
+Base = declarative_base()
 
 class Book(Base):
     __tablename__ = "books"
@@ -21,7 +22,7 @@ class Member(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
-    join_date = Column(DateTime, default=datetime.utcnow)
+    join_date = Column(Date, default=date.today)
 
     borrow_records = relationship("BorrowRecord", back_populates="member")
 
@@ -31,8 +32,8 @@ class BorrowRecord(Base):
     id = Column(Integer, primary_key=True)
     book_id = Column(Integer, ForeignKey("books.id"))
     member_id = Column(Integer, ForeignKey("members.id"))
-    borrow_date = Column(DateTime, default=datetime.utcnow)
-    return_date = Column(DateTime, nullable=True)
+    borrow_date = Column(Date, default=date.today)
+    return_date = Column(Date, nullable=True)
 
     book = relationship("Book", back_populates="borrow_records")
     member = relationship("Member", back_populates="borrow_records")
