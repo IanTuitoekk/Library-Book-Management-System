@@ -374,5 +374,190 @@ def list_active_borrows():
         click.echo(f"  #{record.id}: {record.book.title} → {record.member.name} | Borrowed: {record.borrow_date} | Days: {record.days_borrowed}")
     session.close()
 
+# ========== HISTORY ==========
+@cli.group()
+def history():
+    """View library activity history"""
+    pass
+
+@history.command("all")
+def view_all_history():
+    """View complete library history"""
+    session = get_session()
+    
+    books = Book.get_all(session)
+    members = Member.get_all(session)
+    records = BorrowRecord.get_all(session)
+    
+    click.echo("\n" + "="*60)
+    click.echo("📊 LIBRARY MANAGEMENT SYSTEM - COMPLETE HISTORY")
+    click.echo("="*60)
+    
+    # Books Summary
+    click.echo(f"\n📚 BOOKS SUMMARY:")
+    click.echo(f"   Total Books: {len(books)}")
+    if books:
+        total_copies = sum(book.total_copies for book in books)
+        available_copies = sum(book.available_copies for book in books)
+        click.echo(f"   Total Copies: {total_copies}")
+        click.echo(f"   Available Copies: {available_copies}")
+        click.echo(f"   Borrowed Copies: {total_copies - available_copies}")
+    
+    # Members Summary
+    click.echo(f"\n👥 MEMBERS SUMMARY:")
+    click.echo(f"   Total Members: {len(members)}")
+    if members:
+        active_members = sum(1 for member in members if len(member.active_borrows) > 0)
+        click.echo(f"   Active Borrowers: {active_members}")
+    
+    # Borrow Records Summary
+    click.echo(f"\n📖 BORROW RECORDS SUMMARY:")
+    click.echo(f"   Total Borrows: {len(records)}")
+    if records:
+        active_records = sum(1 for record in records if not record.return_date)
+        returned_records = len(records) - active_records
+        click.echo(f"   Active Borrows: {active_records}")
+        click.echo(f"   Returned Books: {returned_records}")
+    
+    click.echo("\n" + "="*60)
+    session.close()
+
+@history.command("books")
+def view_books_history():
+    """View all books with their history"""
+    session = get_session()
+    books = Book.get_all(session)
+    
+    if not books:
+        click.echo("⚠️ No books in the system.")
+        session.close()
+        return
+    
+    click.echo("\n" + "="*60)
+    click.echo("📚 BOOKS HISTORY")
+    click.echo("="*60 + "\n")
+    
+    for book in books:
+        click.echo(f"📖 {book.title} by {book.author}")
+        click.echo(f"   ID: {book.id} | Copies: {book.available_copies}/{book.total_copies} available")
+        
+        if book.borrow_records:
+            click.echo(f"   Borrow History ({len(book.borrow_records)} total):")
+            for record in book.borrow_records:
+                status = f"✅ Returned {record.return_date}" if record.return_date else "📚 Active"
+                click.echo(f"      - {record.member.name} | {record.borrow_date} | {status}")
+        else:
+            click.echo("   No borrow history")
+        click.echo()
+    
+    session.close()
+
+@history.command("members")
+def view_members_history():
+    """View all members with their history"""
+    session = get_session()
+    members = Member.get_all(session)
+    
+    if not members:
+        click.echo("⚠️ No members in the system.")
+        session.close()
+        return
+    
+    click.echo("\n" + "="*60)
+    click.echo("👥 MEMBERS HISTORY")
+    click.echo("="*60 + "\n")
+    
+    for member in members:
+        active_count = len(member.active_borrows)
+        click.echo(f"👤 {member.name} ({member.email})")
+        click.echo(f"   ID: {member.id} | Joined: {member.join_date}")
+        click.echo(f"   Active Borrows: {active_count}")
+        
+        if member.borrow_records:
+            click.echo(f"   Borrow History ({len(member.borrow_records)} total):")
+            for record in member.borrow_records:
+                status = f"✅ Returned" if record.return_date else "📚 Active"
+                days = f"({record.days_borrowed} days)"
+                click.echo(f"      - {record.book.title} | {record.borrow_date} | {status} {days}")
+        else:
+            click.echo("   No borrow history")
+        click.echo()
+    
+    session.close()
+
+@history.command("stats")
+def view_statistics():
+    """View library statistics"""
+    session = get_session()
+    
+    books = Book.get_all(session)
+    members = Member.get_all(session)
+    records = BorrowRecord.get_all(session)
+    
+    click.echo("\n" + "="*60)
+    click.echo("📊 LIBRARY STATISTICS")
+    click.echo("="*60 + "\n")
+    
+    # Book Statistics
+    if books:
+        click.echo("📚 BOOK STATISTICS:")
+        total_copies = sum(book.total_copies for book in books)
+        available_copies = sum(book.available_copies for book in books)
+        borrowed_copies = total_copies - available_copies
+        
+        click.echo(f"   Total Book Titles: {len(books)}")
+        click.echo(f"   Total Copies: {total_copies}")
+        click.echo(f"   Available: {available_copies} ({(available_copies/total_copies*100):.1f}%)")
+        click.echo(f"   Borrowed: {borrowed_copies} ({(borrowed_copies/total_copies*100):.1f}%)")
+        
+        # Most borrowed books
+        if records:
+            book_borrow_count = {}
+            for record in records:
+                book_id = record.book_id
+                book_borrow_count[book_id] = book_borrow_count.get(book_id, 0) + 1
+            
+            if book_borrow_count:
+                most_borrowed_id = max(book_borrow_count, key=book_borrow_count.get)
+                most_borrowed_book = Book.find_by_id(session, most_borrowed_id)
+                click.echo(f"\n   Most Borrowed Book:")
+                click.echo(f"      '{most_borrowed_book.title}' - {book_borrow_count[most_borrowed_id]} times")
+    
+    # Member Statistics
+    if members:
+        click.echo(f"\n👥 MEMBER STATISTICS:")
+        click.echo(f"   Total Members: {len(members)}")
+        active_members = [m for m in members if len(m.active_borrows) > 0]
+        click.echo(f"   Active Borrowers: {len(active_members)}")
+        
+        # Most active member
+        if records:
+            member_borrow_count = {}
+            for record in records:
+                member_id = record.member_id
+                member_borrow_count[member_id] = member_borrow_count.get(member_id, 0) + 1
+            
+            if member_borrow_count:
+                most_active_id = max(member_borrow_count, key=member_borrow_count.get)
+                most_active_member = Member.find_by_id(session, most_active_id)
+                click.echo(f"\n   Most Active Member:")
+                click.echo(f"      {most_active_member.name} - {member_borrow_count[most_active_id]} borrows")
+    
+    # Borrow Statistics
+    if records:
+        click.echo(f"\n📖 BORROW STATISTICS:")
+        click.echo(f"   Total Borrows: {len(records)}")
+        active = [r for r in records if not r.return_date]
+        returned = [r for r in records if r.return_date]
+        click.echo(f"   Currently Borrowed: {len(active)}")
+        click.echo(f"   Returned: {len(returned)}")
+        
+        if returned:
+            avg_days = sum(r.days_borrowed for r in returned) / len(returned)
+            click.echo(f"   Average Borrow Duration: {avg_days:.1f} days")
+    
+    click.echo("\n" + "="*60)
+    session.close()
+
 if __name__ == "__main__":
     cli()
